@@ -39,13 +39,9 @@ class AuthAgent {
 
         const events = {
             register: async () => {
-                const fullNamePrompt = "Ask the user for their full name in a friendly, conversational tone.";
-                const fullNameQuestion = await this.generateDynamicQuestion(fullNamePrompt);
-                socket.emit("ask", {
-                    content: fullNameQuestion,
-                    status: true,
-                    nextevent: "fullname"
-                });
+                const introPrompt = `always introduce yourself to the user, this is your introduction "Welcome to DateConnect! I am Blaze, your AI guide, and I will assist you through the registration process" you can restructure the sentence as you like. Let's get started with your full name.`;
+                const introMessage = await this.generateDynamicQuestion(introPrompt);
+                socket.emit("ask", { content: introMessage, status: true, nextevent: "fullname" });
             },
 
             fullname: async (fullname: string) => {
