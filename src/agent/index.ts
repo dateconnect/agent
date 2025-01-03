@@ -1,5 +1,6 @@
 import { DefaultEventsMap, Server } from 'socket.io'
-import authAgent from './auth.agent';
+import authAgent from './auth/auth.agent';
+import AuthAgent from './auth/auth.agent';
 
 export const handleSocketConnection = (io: Server<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap, any>)=>{
     io.on('connection', (socket) => {
@@ -11,8 +12,12 @@ export const handleSocketConnection = (io: Server<DefaultEventsMap, DefaultEvent
         socket.emit('reply', 'Message received on the server');
       });
 
-      //onbording event
-      authAgent.registerUser(socket);
+      //auth agent
+      const authAgent = new AuthAgent(socket);
+      authAgent.registerUser(); // register the user
+      
+      
+
 
       socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
