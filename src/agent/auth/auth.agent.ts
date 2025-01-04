@@ -16,7 +16,7 @@ export default class AuthAgent {
     // Reusable method to handle error responses
     private async handleError( prompt: string, nextEvent: string) {
         try {
-            const errorMessage = await this.agent.generateDynamicQuestion(prompt);
+            const errorMessage = await this.agent.generateDynamicQuestion(prompt,"error message");
             this.socket.emit("error", {
                 content: errorMessage,
                 status: false,
@@ -42,7 +42,7 @@ export default class AuthAgent {
         const events = {
             register: async () => {
                 const introPrompt = `always introduce yourself to the user, this is your introduction "Welcome to DateConnect! I am Blaze, your AI guide, and I will assist you through the registration process" you can restructure the sentence as you like. Let's get started with your full name.`;
-                const introMessage = await this.agent.generateDynamicQuestion(introPrompt);
+                const introMessage = await this.agent.generateDynamicQuestion(introPrompt,"user register");
                 prompt= introMessage
                 this.socket.emit("ask", { content: introMessage, status: true, nextevent: "fullname" });
             },
@@ -65,7 +65,7 @@ export default class AuthAgent {
                 console.log("extractedAnswer",extractedAnswer)
                 userDetails['fullname'] = extractedAnswer;
                 const emailPrompt = `Now that we know your name, ask ${userDetails['fullname']} for their email address in a warm and welcoming manner.`;
-                const emailQuestion = await this.agent.generateDynamicQuestion(emailPrompt);
+                const emailQuestion = await this.agent.generateDynamicQuestion(emailPrompt,"user register");
                 prompt= emailQuestion
                 
                 this.socket.emit("ask", {
@@ -97,7 +97,7 @@ export default class AuthAgent {
 
                 userDetails['email'] = email;
                 const passwordPrompt = `Ask ${fullname} to create a password for their new account. The password should be at least 6 characters long.`;
-                const passwordQuestion = await this.agent.generateDynamicQuestion(passwordPrompt);
+                const passwordQuestion = await this.agent.generateDynamicQuestion(passwordPrompt,"user register");
                 this.socket.emit("ask", {
                     content: passwordQuestion,
                     status: true,
@@ -141,13 +141,13 @@ export default class AuthAgent {
 
                 if (savedUser) {
                     const successPrompt = `Generate a personalized success message for the new user ${fullname}, confirming their successful registration, also inform them that an OTP has been sent to their email ${userDetails['email']}`;
-                    const successMessage = await this.agent.generateDynamicQuestion(successPrompt);
+                    const successMessage = await this.agent.generateDynamicQuestion(successPrompt,"user register");
                     delete (user as any).password;
                     this.socket.emit("success", {
                         content: successMessage,
                         status: true,
                         data: user,
-                        nextevent: ""
+                        nextevent: "otp"
                     });
                 } else {
                     await this.handleError( "Generate a generic error message for a failed registration attempt.", "");
@@ -208,27 +208,43 @@ export default class AuthAgent {
             email: "",
             password: ""
         };
-
+         let prompt:string = ""
         const loginEvent = {
+            login: async () => {
+                const introPrompt = `always introduce yourself to the user, this is your introduction "Welcome to DateConnect! I am Blaze, your AI guide, and I will assist you through the login process" you can restructure the sentence as you like. Enter your email to login.`;
+                const introMessage = await this.agent.generateDynamicQuestion(introPrompt,"login");
+                prompt = introMessage
+                this.socket.emit("ask", { content: introMessage, status: true, nextevent: "loginEmail" });
+            },
             email: async (email: string) => {
-            
-                if (!email || !this.isValidEmail(email)) {
+                console.log("email",email)
+             if (!email) {
                     await this.handleError( "Generate an error message for an invalid email address, and ask the user to provide a valid one.", "loginEmail");
                     this.socket.once("loginEmail", async (data:{email: string}) => loginEvent.email(data?.email));
                     return;
                 }
-
-                const userExists = await User.findOne({ email });
-             
-                if (userExists) {
-                    await this.handleError( "Generate an error message for an email address is invalid, and ask the user to provide another one.", "loginEmail");
+                const isValidEmail = await this.agent.validateUserResponse(prompt,email)
+                console.log("isValidEmail",isValidEmail,prompt,email)
+                if(!isValidEmail){
+                    await this.handleError( "Generate an error message for an invalid email address, and ask the user to provide a valid one.", "loginEmail");
                     this.socket.once("loginEmail", async (data:{email: string}) => loginEvent.email(data?.email));
                     return;
                 }
-
+                const extractedAnswer = await this.agent.extractAnswer(prompt,email,'string');
+               console.log("extractedAnswer ",extractedAnswer )
+              
+                
+                const userExists = await User.findOne({ email:extractedAnswer });
+             console.log("userExists",userExists)
+                if (!userExists) {
+                    await this.handleError( "Generate an error message for an email address is not on our system, and ask the user to provide another one.", "loginEmail");
+                    this.socket.once("loginEmail", async (data:{email: string}) => loginEvent.email(data?.email));
+                    return;
+                }
+               // userExists?.fullName
                 userDetails['email'] = email;
-                const passwordPrompt = `Ask  create a password for their new account. The password should be at least 6 characters long.`;
-                const passwordQuestion = await this.agent.generateDynamicQuestion(passwordPrompt);
+                const passwordPrompt = `Ask ${userExists?.fullName} to enter the password to there account to be able to login. note: this is for a chat based ai agent`;
+                const passwordQuestion = await this.agent.generateDynamicQuestion(passwordPrompt,"login");
                 this.socket.emit("ask", {
                     content: passwordQuestion,
                     status: true,
@@ -239,6 +255,7 @@ export default class AuthAgent {
 
         // Initial event listener
         this.socket.setMaxListeners(15);  // Increase the max listeners limit to avoid warning
+        this.socket.once("login", loginEvent.login);
         this.socket.once("loginEmail", async (data:{email: string}) => loginEvent.email(data?.email));
 
     }

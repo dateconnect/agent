@@ -12,13 +12,17 @@ export default class Agent {
         });
     }
 
-    public async generateDynamicQuestion(prompt: string): Promise<string> {
+    public async generateDynamicQuestion(prompt: string, context?:string): Promise<string> {
         try {
+            const systemMessage = context
+            ? `You are Blaze, a helpful assistant for the DateConnect application. You assist users in ${context}. Provide helpful, context-aware questions to guide the user.`
+            : "You are Blaze, a helpful assistant for the DateConnect application. Guide the user through their process with relevant questions.";
+
             const response = await this.model.chat.completions.create({
                 model: "gpt-3.5-turbo-0125",
                 store: true,
                 messages: [
-                    { role: "system", content: "You are a helpful assistant helping a user through a registration process. Provide questions to help the user register." },
+                    { role: "system", content:systemMessage },
                     { role: "user", content: prompt },
                 ],
                 max_tokens: 100
