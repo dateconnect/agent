@@ -38,11 +38,12 @@ export default class AuthAgent {
             email: "",
             password: ""
         };
-
+        let prompt:string = ""
         const events = {
             register: async () => {
                 const introPrompt = `always introduce yourself to the user, this is your introduction "Welcome to DateConnect! I am Blaze, your AI guide, and I will assist you through the registration process" you can restructure the sentence as you like. Let's get started with your full name.`;
                 const introMessage = await this.agent.generateDynamicQuestion(introPrompt);
+                prompt= introMessage
                 this.socket.emit("ask", { content: introMessage, status: true, nextevent: "fullname" });
             },
 
@@ -52,9 +53,21 @@ export default class AuthAgent {
                     this.socket.once("fullname", async (data: { fullname: string }) => events.fullname(data?.fullname));
                     return;
                 }
-                userDetails['fullname'] = fullname;
-                const emailPrompt = `Now that we know your name, ask ${fullname} for their email address in a warm and welcoming manner.`;
+                //validate the fullname
+                const isValidName = await this.agent.validateUserResponse(prompt,fullname)
+         
+                if(!isValidName){
+                    await this.handleError( "Generate an error message for an invalid name, and ask the user to provide a valid one.", "fullname");
+                    this.socket.once("fullname", async (data: { fullname: string }) => events.fullname(data?.fullname));
+                    return;
+                }
+                const extractedAnswer = await this.agent.extractAnswer(prompt,fullname,'string');
+                console.log("extractedAnswer",extractedAnswer)
+                userDetails['fullname'] = extractedAnswer;
+                const emailPrompt = `Now that we know your name, ask ${userDetails['fullname']} for their email address in a warm and welcoming manner.`;
                 const emailQuestion = await this.agent.generateDynamicQuestion(emailPrompt);
+                prompt= emailQuestion
+                
                 this.socket.emit("ask", {
                     content: emailQuestion,
                     status: true,
@@ -68,7 +81,7 @@ export default class AuthAgent {
                     this.socket.once("fullname", async (data: { fullname: string }) => events.fullname(data?.fullname));
                     return;
                 }
-
+              
                 if (!email || !this.isValidEmail(email)) {
                     await this.handleError( "Generate an error message for an invalid email address, and ask the user to provide a valid one.", "email");
                     this.socket.once("email", async (data:{email: string}) => events.email(data?.email, userDetails['fullname']));
@@ -191,6 +204,42 @@ export default class AuthAgent {
     }
 
     public async login(){
+        let userDetails = {
+            email: "",
+            password: ""
+        };
+
+        const loginEvent = {
+            email: async (email: string) => {
+            
+                if (!email || !this.isValidEmail(email)) {
+                    await this.handleError( "Generate an error message for an invalid email address, and ask the user to provide a valid one.", "loginEmail");
+                    this.socket.once("loginEmail", async (data:{email: string}) => loginEvent.email(data?.email));
+                    return;
+                }
+
+                const userExists = await User.findOne({ email });
+             
+                if (userExists) {
+                    await this.handleError( "Generate an error message for an email address is invalid, and ask the user to provide another one.", "loginEmail");
+                    this.socket.once("loginEmail", async (data:{email: string}) => loginEvent.email(data?.email));
+                    return;
+                }
+
+                userDetails['email'] = email;
+                const passwordPrompt = `Ask  create a password for their new account. The password should be at least 6 characters long.`;
+                const passwordQuestion = await this.agent.generateDynamicQuestion(passwordPrompt);
+                this.socket.emit("ask", {
+                    content: passwordQuestion,
+                    status: true,
+                    nextevent: "password"
+                });
+            },
+        }
+
+        // Initial event listener
+        this.socket.setMaxListeners(15);  // Increase the max listeners limit to avoid warning
+        this.socket.once("loginEmail", async (data:{email: string}) => loginEvent.email(data?.email));
 
     }
 

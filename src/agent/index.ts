@@ -15,7 +15,7 @@ export const handleSocketConnection = (io: Server<DefaultEventsMap, DefaultEvent
       //auth agent
       const authAgent = new AuthAgent(socket);
       authAgent.registerUser(); // register the user
-      
+      authAgent.login(); // login the user
       
 
 
