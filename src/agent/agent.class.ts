@@ -8,15 +8,15 @@ export default class Agent {
 
     constructor() {
         this.model = new OpenAI({
-            apiKey: process.env.OPENAI_API_KEY,
+            apiKey: process.env.OPEN_API_KEY,
         });
     }
 
     public async generateDynamicQuestion(prompt: string, context?:string): Promise<string> {
         try {
             const systemMessage = context
-            ? `You are Blaze, a helpful assistant for the DateConnect application. You assist users in ${context}. Provide helpful, context-aware questions to guide the user.`
-            : "You are Blaze, a helpful assistant for the DateConnect application. Guide the user through their process with relevant questions.";
+            ? `You are a helpful assistant for the Dateconnect application. You assist users in ${context}. Provide helpful, context-aware questions to guide the user.`
+            : "You are  a helpful assistant for the Dateconnect application. Guide the user through their process with relevant questions.";
 
             const response = await this.model.chat.completions.create({
                 model: "gpt-3.5-turbo-0125",
@@ -25,7 +25,7 @@ export default class Agent {
                     { role: "system", content:systemMessage },
                     { role: "user", content: prompt },
                 ],
-                max_tokens: 100
+                max_tokens: 30
             });
             return response.choices[0].message['content'];
         } catch (error) {
@@ -80,11 +80,11 @@ Only provide the extracted value.`;
                     { role: "system", content: "You are an assistant that extracts specific answers from user responses based on a given prompt." },
                     { role: "user", content: extractionPrompt },
                 ],
-                max_tokens: 50
+                max_tokens: 20
             });
 
             const extractedAnswer = extractionResponse.choices[0].message['content'].trim();
-
+            console.log("extractedAnswer from the agent",extractedAnswer);
             // Parse the extracted answer based on the expected data type
             switch (dataType.toLowerCase()) {
                 case 'number':
@@ -99,6 +99,92 @@ Only provide the extracted value.`;
         } catch (error) {
             console.error("Error extracting answer:", error);
             return null; // Return null if extraction fails
+        }
+    }
+    public async selectChoiceBasedOnIntent(prompt: string, choices: string[], userResponse: string): Promise<string> {
+        try {
+            const choicesList = choices.map(choice => `"${choice}"`).join(", ");
+            const selectionPrompt = `Based on the user's response, choose the most appropriate option from the given choices.
+            
+Prompt: ${prompt}
+
+Choices: [${choicesList}]
+
+User's Response: ${userResponse}
+
+Only return the selected choice without any additional explanation. If none of the choices match, return "None".`;
+
+            const response = await this.model.chat.completions.create({
+                model: "gpt-3.5-turbo-0125",
+                messages: [
+                    { role: "system", content: "You are a choice selector. Match user responses to the most relevant choice based on context and intent." },
+                    { role: "user", content: selectionPrompt },
+                ],
+                max_tokens: 10,
+            });
+
+            const selectedChoice = response.choices[0].message["content"].trim();
+            console.log("Selected Choice:", selectedChoice);
+            return choices.includes(selectedChoice) ? selectedChoice : "None";
+        } catch (error) {
+            console.error("Error selecting choice based on intent:", error);
+            return "None"; // Default to "None" if selection fails
+        }
+    }
+
+
+    public async checkPositiveResponse(prompt: string, response: string): Promise<boolean> {
+        try {
+            const validationPrompt = `Analyze the user's response to determine if it is positive or negative in the context of the question.
+
+Question: ${prompt}
+
+User's Response: ${response}
+
+If the response is positive (indicating agreement, affirmation, or a constructive reply), reply with 'true'. If it is negative (indicating disagreement, rejection, or a lack of agreement), reply with 'false'.`;
+
+            const validationResponse = await this.model.chat.completions.create({
+                model: "gpt-3.5-turbo-0125",
+                messages: [
+                    {
+                        role: "system",
+                        content:
+                            "You are a response evaluator. Determine if a user's response to a question is positive or negative based on the context.",
+                    },
+                    { role: "user", content: validationPrompt },
+                ],
+                max_tokens: 10,
+            });
+
+            const result = validationResponse.choices[0].message["content"].trim();
+
+            // Convert the response to a boolean value
+            return result.toLowerCase() === "true";
+        } catch (error) {
+            console.error("Error checking positive response:", error);
+            return false; // Default to false if validation fails
+        }
+    }
+
+    public async generateSentenceBasedOnContext(prompt: string, context?: string): Promise<string> {
+        try {
+            const systemMessage = context
+                ? `You are a creative sentence generator for the Dateconnect application. Generate a sentence that reflects the context: ${context}`
+                : "You are a creative sentence generator for the Dateconnect application. Generate sentences based on the user's prompt.";
+
+            const response = await this.model.chat.completions.create({
+                model: "gpt-3.5-turbo-0125",
+                messages: [
+                    { role: "system", content: systemMessage },
+                    { role: "user", content: prompt },
+                ],
+                max_tokens: 50,
+            });
+
+            return response.choices[0].message["content"].trim();
+        } catch (error) {
+            console.error("Error generating sentence based on context:", error);
+            return "Unable to generate a sentence based on the provided context.";
         }
     }
 }
